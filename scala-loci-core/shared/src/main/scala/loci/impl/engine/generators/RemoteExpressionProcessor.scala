@@ -81,12 +81,28 @@ trait RemoteExpressionProcessor { this: Generation =>
         tree
     }
 
+    def removeQualifier(in: String) = in.substring(in.lastIndexOf('.')+1).trim()
+    def processWasmCall(call: Tree) = call match {
+      case q"$expr(...$exprss)" => {
+        val funName = TermName(removeQualifier(expr.toString)+"Scala")
+        // The teaVM generated arg list is one off
+        val args = q"0" +: exprss.head
+        q"""import scala.scalajs.js
+            val functionExported = js.Dynamic.global.selectDynamic("wasmExports")
+            functionExported.applyDynamic(${funName.decodedName.toString})(..$args).asInstanceOf[Int]"""
+      }
+    }
+
     def process(tree: Tree, wrapperType: Option[Type]) = tree match {
-      case q"$expr.$_[..$_](...$exprss)"
+      case q"$expr.$_[..$remoteNode](...$exprss)"
           if symbols.remoteCall == tree.symbol =>
         val call = super.transform(exprss.head.head)
-        processTypedWrapper(
-          processSelectionExpression(expr, call), wrapperType)
+        val rn = removeQualifier(remoteNode(2).toString)
+        if (rn == "Wasm")
+          processWasmCall(call)
+        else
+          processTypedWrapper(
+            processSelectionExpression(expr, call), wrapperType)
 
       case q"$expr.$_[..$_](...$exprssIdentifier).$_[..$_](...$exprssValue)"
           if symbols.remoteSet == tree.symbol =>
