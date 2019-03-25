@@ -99,12 +99,22 @@ trait PeerImplementationGenerator { this: Generation =>
       }
       else
         declTypeTree
+    def annotationDefinition(in: List[Tree], peerName:String, funName:String) =
+      if (peerName == "Wasm") {
+        val funNameTerm = TermName(funName+"Scala")
+        q"new Export(name = ${funNameTerm.decodedName.toString})" +: in
+      }
+      else
+        in
 
-    def flagDefinition(mods: Modifiers, expr: Tree) =
+    def flagDefinition(mods: Modifiers, expr: Tree, peerName: String, funName: String) = {
+      val newAns = annotationDefinition(mods.annotations, peerName, funName)
+      if (peerName == "Wasm")
+        c.warning(expr.pos, s"annns $peerName ex $expr old ${mods.annotations} new $newAns")
       Modifiers(
         if (expr == EmptyTree) mods.flags | Flag.DEFERRED else mods.flags,
-        mods.privateWithin, mods.annotations)
-
+        mods.privateWithin, annotationDefinition(mods.annotations, peerName, funName))
+    }
     def peerPlacedAbstractions(peerSymbol: TypeSymbol) =
       aggregator.all[PlacedAbstraction] filter { _.peerSymbol == peerSymbol }
 
@@ -122,20 +132,20 @@ trait PeerImplementationGenerator { this: Generation =>
             `peerSymbol`, exprType, Some(declTypeTree), _, expr, index) =>
           (internal setPos (
             new PlacedReferenceAdapter(peerSymbol) transform
-              ValDef(flagDefinition(mods, expr), name,
+              ValDef(flagDefinition(mods, expr, "", ""), name,
                 createDeclTypeTree(declTypeTree, exprType), expr),
             definition.pos),
           index)
 
         case PlacedStatement(
             definition @ DefDef(mods, name, tparams, vparamss, _, _),
-            `peerSymbol`, exprType, Some(declTypeTree), _, expr, index) =>
-          (internal setPos (
-            new PlacedReferenceAdapter(peerSymbol) transform
-              DefDef(flagDefinition(mods, expr), name, tparams, vparamss,
-                createDeclTypeTree(declTypeTree, exprType), expr),
-            definition.pos),
-          index)
+          `peerSymbol`, exprType, Some(declTypeTree), _, expr, index) =>
+          val fullPeer = peerSymbol.fullName
+          val shortPeer = fullPeer.substring(fullPeer.lastIndexOf('.')+1).trim()
+          val ddef = new PlacedReferenceAdapter(peerSymbol) transform
+              DefDef(flagDefinition(mods, expr, shortPeer, s"$name"), name, tparams, vparamss,
+                createDeclTypeTree(declTypeTree, exprType), expr)
+          (internal setPos (ddef, definition.pos), index)
 
         case PlacedStatement(tree, `peerSymbol`, _, None, _, expr, index)
             if !(symbols.specialPlaced contains tree.symbol) =>
@@ -282,6 +292,7 @@ trait PeerImplementationGenerator { this: Generation =>
                   extends ..$implParents {
                 $dispatchImpl
                 $metaPeerImpl
+                import org.teavm.interop.Export
                 ..$statements
           }"""
         else
@@ -289,9 +300,9 @@ trait PeerImplementationGenerator { this: Generation =>
                   extends ..$implParents {
                 $dispatchImpl
                 $metaPeerImpl
+                import org.teavm.interop.Export
                 ..$statements
           }"""
-
       val peerInterface =
         q"""$synthetic object $interface {
               ..${abstractions flatMap { _.interfaceDefinitions } }
