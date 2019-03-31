@@ -10,8 +10,6 @@ licenses in ThisBuild += "Apache-2.0" -> url("http://www.apache.org/licenses/LIC
 
 scalacOptions in ThisBuild ++= Seq("-feature", "-deprecation", "-unchecked", "-Xlint")
 
-val localMavenRepo = resolvers += Resolver.mavenLocal
-
 val macroparadise = addCompilerPlugin(
   "org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.patch)
 
@@ -44,6 +42,8 @@ val play = libraryDependencies +=
 
 val scalajsDom = libraryDependencies +=
 "org.scala-js" %%%! "scalajs-dom" % "0.9.1"
+
+resolvers in ThisBuild += Resolver.mavenLocal
 
 val teavmInterop = libraryDependencies +=
 "org.teavm" % "teavm-interop" % "0.6.0-SNAPSHOT"
@@ -82,9 +82,10 @@ lazy val lociCore = (crossProject
   in file("scala-loci-core")
   settings (normalizedName := "scala-loci-core",
             SourceGenerator.transmittableTuples,
-            SourceGenerator.valueTypesHigherKinds,
+    SourceGenerator.valueTypesHigherKinds,
+    teavmInterop,
             retypecheckRepo, retypecheck,
-            macroparadise, macrodeclaration, scalatest, localMavenRepo, teavmInterop))
+            macroparadise, macrodeclaration, scalatest))
 
 lazy val lociCoreJVM = lociCore.jvm
 lazy val lociCoreJS = lociCore.js
