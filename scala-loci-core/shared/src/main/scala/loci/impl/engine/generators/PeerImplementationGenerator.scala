@@ -109,8 +109,6 @@ trait PeerImplementationGenerator { this: Generation =>
 
     def flagDefinition(mods: Modifiers, expr: Tree, peerName: String, funName: String) = {
       val newAns = annotationDefinition(mods.annotations, peerName, funName)
-      if (peerName == "Wasm")
-        c.warning(expr.pos, s"annns $peerName ex $expr old ${mods.annotations} new $newAns")
       Modifiers(
         if (expr == EmptyTree) mods.flags | Flag.DEFERRED else mods.flags,
         mods.privateWithin, annotationDefinition(mods.annotations, peerName, funName))
@@ -139,13 +137,15 @@ trait PeerImplementationGenerator { this: Generation =>
 
         case PlacedStatement(
             definition @ DefDef(mods, name, tparams, vparamss, _, _),
-          `peerSymbol`, exprType, Some(declTypeTree), _, expr, index) =>
+          `peerSymbol`, exprType, Some(declTypeTree), _, expr, index) => {
           val fullPeer = peerSymbol.fullName
           val shortPeer = fullPeer.substring(fullPeer.lastIndexOf('.')+1).trim()
           val ddef = new PlacedReferenceAdapter(peerSymbol) transform
-              DefDef(flagDefinition(mods, expr, shortPeer, s"$name"), name, tparams, vparamss,
-                createDeclTypeTree(declTypeTree, exprType), expr)
+            DefDef(flagDefinition(mods, expr, shortPeer, s"$name"), name, tparams, vparamss,
+            createDeclTypeTree(declTypeTree, exprType), expr)
+
           (internal setPos (ddef, definition.pos), index)
+        }
 
         case PlacedStatement(tree, `peerSymbol`, _, None, _, expr, index)
             if !(symbols.specialPlaced contains tree.symbol) =>
@@ -303,6 +303,19 @@ trait PeerImplementationGenerator { this: Generation =>
                 import org.teavm.interop.Export
                 ..$statements
           }"""
+
+      val exported =
+        if (peerName.toString == "Wasm")
+                        q"""
+                        object WasmExported {
+                        def main(args: Array[String]): Unit = {}
+                        import org.teavm.interop.Export
+                         ..$statements
+                        }
+                        """
+        else
+          q""
+
       val peerInterface =
         q"""$synthetic object $interface {
               ..${abstractions flatMap { _.interfaceDefinitions } }
@@ -317,6 +330,7 @@ trait PeerImplementationGenerator { this: Generation =>
                   extends { ..$earlydefns } with ..$parents { $self =>
                 ${markLociSynthetic(peerInterface)}
                 ${markLociSynthetic(peerImpl)}
+                ${markLociSynthetic(exported)}
                 ..$stats
           }"""
 
@@ -325,6 +339,7 @@ trait PeerImplementationGenerator { this: Generation =>
             q"""$synthetic object ${peerName.toTermName} {
                   $peerInterface
                   $peerImpl
+                  $exported
             }""")
       }
 

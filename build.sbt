@@ -10,8 +10,7 @@ licenses in ThisBuild += "Apache-2.0" -> url("http://www.apache.org/licenses/LIC
 
 scalacOptions in ThisBuild ++= Seq("-feature", "-deprecation", "-unchecked", "-Xlint")
 
-addSbtPlugin("com.eed3si9n" % "sbt-assembly" % "0.14.9")
-
+val localMavenRepo = resolvers += Resolver.mavenLocal
 
 val macroparadise = addCompilerPlugin(
   "org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.patch)
@@ -47,7 +46,7 @@ val scalajsDom = libraryDependencies +=
 "org.scala-js" %%%! "scalajs-dom" % "0.9.1"
 
 val teavmInterop = libraryDependencies +=
-"org.teavm" % "teavm-interop" % "0.5.1"
+"org.teavm" % "teavm-interop" % "0.6.0-SNAPSHOT"
 
 
 def preventPublication(project: Project) = project settings (
@@ -85,7 +84,7 @@ lazy val lociCore = (crossProject
             SourceGenerator.transmittableTuples,
             SourceGenerator.valueTypesHigherKinds,
             retypecheckRepo, retypecheck,
-            macroparadise, macrodeclaration, scalatest, teavmInterop))
+            macroparadise, macrodeclaration, scalatest, localMavenRepo, teavmInterop))
 
 lazy val lociCoreJVM = lociCore.jvm
 lazy val lociCoreJS = lociCore.js
